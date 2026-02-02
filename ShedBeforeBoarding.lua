@@ -24,6 +24,12 @@ overlay.texture = overlay:CreateTexture(nil, "OVERLAY")
 overlay.texture:SetAllPoints()
 overlay.texture:SetColorTexture(0, 0, 0, 0.7)
 
+-- Create "Waiting for GCD" text on the overlay
+overlay.waitingText = overlay:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+overlay.waitingText:SetPoint("CENTER", overlay, "CENTER", 0, 0)
+overlay.waitingText:SetText("Waiting for GCD...")
+overlay.waitingText:Hide()
+
 -- Create the cancel form button with proper secure setup
 local cancelButton = CreateFrame("Button", addonName .. "CancelButton", UIParent, "SecureActionButtonTemplate,UIPanelButtonTemplate")
 cancelButton:SetSize(140, 32)
@@ -92,13 +98,37 @@ local function GetFormSpellName()
     return nil
 end
 
+-- Flag to prevent immediate re-show after clicking button
+local waitingForFormDrop = false
+
+-- Flag to prevent duplicate processing
+local pendingUpdate = false
+
 -- Update button visibility and spell attribute based on shapeshift status
-local function UpdateButtonVisibility()
+-- waitForGCD: if true, show "Waiting for GCD..." before the button
+local function UpdateButtonVisibility(waitForGCD)
+    -- Skip if we just clicked the button and form hasn't dropped yet
+    if waitingForFormDrop then
+        if GetShapeshiftForm() == 0 then
+            -- Form dropped, reset flag
+            waitingForFormDrop = false
+        else
+            return
+        end
+    end
+    
+    -- Prevent duplicate rapid calls
+    if pendingUpdate then
+        return
+    end
+    
     if TaxiFrame and TaxiFrame:IsShown() and GetShapeshiftForm() > 0 and not InCombatLockdown() then
+        -- Mark as pending to prevent duplicate calls
+        pendingUpdate = true
+        
         -- Get current form spell name and set it
         local spellName = GetFormSpellName()
-        
-        -- Clear previous attributes first
+                -- Clear previous attributes first
         cancelButton:SetAttribute("type", nil)
         cancelButton:SetAttribute("spell", nil)
         cancelButton:SetAttribute("macrotext", nil)
@@ -124,9 +154,28 @@ local function UpdateButtonVisibility()
         cancelButton:SetPoint("CENTER", mapFrame, "CENTER", 0, 0)
         cancelButton:SetFrameStrata("TOOLTIP")
         cancelButton:SetFrameLevel(overlay:GetFrameLevel() + 10)
-        cancelButton:Show()
+        
+        if waitForGCD then
+            -- Show waiting text while GCD is active
+            overlay.waitingText:Show()
+            
+            -- Wait for GCD (1.5 seconds) before showing the button
+            C_Timer.After(1.5, function()
+                pendingUpdate = false
+                if TaxiFrame and TaxiFrame:IsShown() and GetShapeshiftForm() > 0 and not InCombatLockdown() then
+                    overlay.waitingText:Hide()
+                    cancelButton:Show()
+                end
+            end)
+        else
+            -- No GCD wait needed, show button immediately
+            pendingUpdate = false
+            cancelButton:Show()
+        end
     else
+        pendingUpdate = false
         if not InCombatLockdown() then
+            overlay.waitingText:Hide()
             overlay:Hide()
             cancelButton:Hide()
         end
@@ -136,7 +185,9 @@ end
 -- Hide button and overlay after clicking
 cancelButton:HookScript("PostClick", function()
     if not InCombatLockdown() then
+        waitingForFormDrop = true
         C_Timer.After(0.1, function()
+            overlay.waitingText:Hide()
             overlay:Hide()
             cancelButton:Hide()
         end)
@@ -158,7 +209,10 @@ frame:SetScript("OnEvent", function(self, event, ...)
         -- Hook TaxiFrame hide to hide our button
         if TaxiFrame then
             TaxiFrame:HookScript("OnHide", function()
+                waitingForFormDrop = false
+                pendingUpdate = false
                 if not InCombatLockdown() then
+                    overlay.waitingText:Hide()
                     overlay:Hide()
                     cancelButton:Hide()
                 end
@@ -166,7 +220,13 @@ frame:SetScript("OnEvent", function(self, event, ...)
         end
         
         print("|cFF00FF00" .. addonName .. "|r loaded")
-    elseif event == "TAXIMAP_OPENED" or event == "UPDATE_SHAPESHIFT_FORM" then
-        UpdateButtonVisibility()
+    elseif event == "TAXIMAP_OPENED" then
+        -- Opening map while already in form - no GCD wait needed
+        UpdateButtonVisibility(false)
+    elseif event == "UPDATE_SHAPESHIFT_FORM" then
+        -- Shifted while map is open - need to wait for GCD
+        if TaxiFrame and TaxiFrame:IsShown() then
+            UpdateButtonVisibility(true)
+        end
     end
 end)

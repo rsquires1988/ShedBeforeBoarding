@@ -1,0 +1,33 @@
+name: Release to CurseForge
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Create Release Package
+        run: |
+          mkdir -p ShedBeforeBoarding
+          cp ShedBeforeBoarding.lua ShedBeforeBoarding/
+          cp ShedBeforeBoarding.toc ShedBeforeBoarding/
+          cp README.md ShedBeforeBoarding/
+          cp LICENSE ShedBeforeBoarding/
+          zip -r ShedBeforeBoarding.zip ShedBeforeBoarding
+      
+      - name: Upload to CurseForge
+        uses: itsmeow/curseforge-upload@v3
+        with:
+          token: ${{ secrets.CF_API_KEY }}
+          project_id: YOUR_PROJECT_ID  # Replace with your CurseForge project ID
+          game_endpoint: wow
+          file_path: ShedBeforeBoarding.zip
+          changelog: "See GitHub releases for changelog"
+          changelog_type: text
+          game_versions: "TBC Classic"  # Adjust as needed
+          release_type: release

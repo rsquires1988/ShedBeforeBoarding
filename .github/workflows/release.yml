@@ -24,7 +24,7 @@ jobs:
         uses: itsmeow/curseforge-upload@v3
         with:
           token: ${{ secrets.CF_API_KEY }}
-          project_id: YOUR_PROJECT_ID  # Replace with your CurseForge project ID
+          project_id: 1451681
           game_endpoint: wow
           file_path: ShedBeforeBoarding.zip
           changelog: "See GitHub releases for changelog"

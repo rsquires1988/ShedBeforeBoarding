@@ -34,7 +34,7 @@ overlay.waitingText:Hide()
 local cancelButton = CreateFrame("Button", addonName .. "CancelButton", UIParent, "SecureActionButtonTemplate,UIPanelButtonTemplate")
 cancelButton:SetSize(140, 32)
 cancelButton:SetText("Cancel Form")
-cancelButton:RegisterForClicks("LeftButtonDown")
+cancelButton:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
 cancelButton:Hide()
 
 -- Form spell names by class and index

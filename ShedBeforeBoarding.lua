@@ -54,48 +54,56 @@ local formSpellNames = {
     ["Ghost Wolf"] = true,
 }
 
--- Index to spell name mapping (covers all classes)
-local formIndexToSpell = {
-    -- Druid (these indices are typical but may vary)
-    [1] = "Bear Form",
-    [2] = "Aquatic Form",
-    [3] = "Cat Form",
-    [4] = "Travel Form",
-    [5] = "Moonkin Form",
-    [6] = "Tree of Life",
-    [27] = "Swift Flight Form",
-    [29] = "Flight Form",
-    [31] = "Dire Bear Form",
+-- Index to spell name mapping by class
+local formIndexToSpellByClass = {
+    ["DRUID"] = {
+        [1] = "Bear Form",
+        [2] = "Aquatic Form",
+        [3] = "Cat Form",
+        [4] = "Travel Form",
+        [5] = "Moonkin Form",
+        [6] = "Tree of Life",
+        [27] = "Swift Flight Form",
+        [29] = "Flight Form",
+        [31] = "Dire Bear Form",
+    },
+    ["SHAMAN"] = {
+        [1] = "Ghost Wolf",
+    },
 }
 
--- Get form spell name - try multiple methods
+-- Get form spell name for current class and form index
 local function GetFormSpellName()
     local formIndex = GetShapeshiftForm()
     if not formIndex or formIndex == 0 then
         return nil
     end
     
-    -- Method 1: Try GetShapeshiftFormInfo (works for Shaman/Priest)
+    local _, class = UnitClass("player")
+    local classTable = formIndexToSpellByClass[class]
+    
+    if classTable and classTable[formIndex] then
+        return classTable[formIndex]
+    end
+    
+    -- Fallback: try GetShapeshiftFormInfo
     local icon, name = GetShapeshiftFormInfo(formIndex)
     if name and type(name) == "string" and name ~= "" and formSpellNames[name] then
         return name
     end
     
-    -- Method 2: Use lookup table (mainly for Druid)
-    local spellName = formIndexToSpell[formIndex]
-    if spellName then
-        return spellName
-    end
-    
-    -- Method 3: For Shaman with single form
-    local _, class = UnitClass("player")
-    if class == "SHAMAN" then
-        return "Ghost Wolf"
-    end
-    
     -- Unknown form
-    print("|cFFFF0000[" .. addonName .. "]|r Unknown form index: " .. formIndex .. " - please report!")
+    print("|cFFFF0000[ShedBeforeBoarding]|r Unknown form index: " .. formIndex .. " for class: " .. class .. " - please report!")
     return nil
+end
+
+-- Get current shapeshift form index (returns nil if not in a form)
+local function GetCurrentFormIndex()
+    local formIndex = GetShapeshiftForm()
+    if not formIndex or formIndex == 0 then
+        return nil
+    end
+    return formIndex
 end
 
 -- Flag to prevent immediate re-show after clicking button
@@ -104,12 +112,17 @@ local waitingForFormDrop = false
 -- Flag to prevent duplicate processing
 local pendingUpdate = false
 
+-- Check if we're currently in a shapeshift form
+local function IsInForm()
+    return GetCurrentFormIndex() ~= nil
+end
+
 -- Update button visibility and spell attribute based on shapeshift status
 -- waitForGCD: if true, show "Waiting for GCD..." before the button
 local function UpdateButtonVisibility(waitForGCD)
     -- Skip if we just clicked the button and form hasn't dropped yet
     if waitingForFormDrop then
-        if GetShapeshiftForm() == 0 then
+        if not IsInForm() then
             -- Form dropped, reset flag
             waitingForFormDrop = false
         else
@@ -122,24 +135,26 @@ local function UpdateButtonVisibility(waitForGCD)
         return
     end
     
-    if TaxiFrame and TaxiFrame:IsShown() and GetShapeshiftForm() > 0 and not InCombatLockdown() then
+    if TaxiFrame and TaxiFrame:IsShown() and GetCurrentFormIndex() and not InCombatLockdown() then
         -- Mark as pending to prevent duplicate calls
         pendingUpdate = true
         
         -- Get current form spell name and set it
         local spellName = GetFormSpellName()
-                -- Clear previous attributes first
+        
+        -- Clear previous attributes first
         cancelButton:SetAttribute("type", nil)
         cancelButton:SetAttribute("spell", nil)
         cancelButton:SetAttribute("macrotext", nil)
         
-        if spellName and type(spellName) == "string" then
+        if spellName then
+            -- Cast the same form spell to toggle it off
             cancelButton:SetAttribute("type", "spell")
             cancelButton:SetAttribute("spell", spellName)
         else
-            -- If we can't get the spell name, use macro as fallback
-            cancelButton:SetAttribute("type", "macro")
-            cancelButton:SetAttribute("macrotext", "/cancelform")
+            -- Hide button if we can't determine the form
+            pendingUpdate = false
+            return
         end
         
         -- Position overlay - use TaxiRouteMap if it exists (the actual map texture area)
@@ -162,7 +177,7 @@ local function UpdateButtonVisibility(waitForGCD)
             -- Wait for GCD (1.5 seconds) before showing the button
             C_Timer.After(1.5, function()
                 pendingUpdate = false
-                if TaxiFrame and TaxiFrame:IsShown() and GetShapeshiftForm() > 0 and not InCombatLockdown() then
+                if TaxiFrame and TaxiFrame:IsShown() and IsInForm() and not InCombatLockdown() then
                     overlay.waitingText:Hide()
                     cancelButton:Show()
                 end
@@ -225,7 +240,8 @@ frame:SetScript("OnEvent", function(self, event, ...)
         UpdateButtonVisibility(false)
     elseif event == "UPDATE_SHAPESHIFT_FORM" then
         -- Shifted while map is open - need to wait for GCD
-        if TaxiFrame and TaxiFrame:IsShown() then
+        -- But only if the button isn't already visible (avoid duplicate GCD waits)
+        if TaxiFrame and TaxiFrame:IsShown() and not cancelButton:IsShown() then
             UpdateButtonVisibility(true)
         end
     end

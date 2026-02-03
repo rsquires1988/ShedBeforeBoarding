@@ -2,6 +2,6 @@
 ## Title: Shed Before Boarding
 ## Notes: No fur allowed in the cabin! Adds a button to cancel shapeshift forms at flight masters.
 ## Author: Player
-## Version: 1.1.4
+## Version: 1.1.5
 
 ShedBeforeBoarding.lua

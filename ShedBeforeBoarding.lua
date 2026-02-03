@@ -34,7 +34,7 @@ overlay.waitingText:Hide()
 local cancelButton = CreateFrame("Button", addonName .. "CancelButton", UIParent, "SecureActionButtonTemplate,UIPanelButtonTemplate")
 cancelButton:SetSize(140, 32)
 cancelButton:SetText("Cancel Form")
-cancelButton:RegisterForClicks("AnyUp", "AnyDown")
+cancelButton:RegisterForClicks("AnyUp")
 cancelButton:Hide()
 
 -- Form spell names by class and index
@@ -180,6 +180,13 @@ local function UpdateButtonVisibility(waitForGCD)
                 if TaxiFrame and TaxiFrame:IsShown() and IsInForm() and not InCombatLockdown() then
                     overlay.waitingText:Hide()
                     cancelButton:Show()
+                else
+                    -- Conditions changed, hide everything
+                    if not InCombatLockdown() then
+                        overlay.waitingText:Hide()
+                        overlay:Hide()
+                        cancelButton:Hide()
+                    end
                 end
             end)
         else
@@ -239,10 +246,21 @@ frame:SetScript("OnEvent", function(self, event, ...)
         -- Opening map while already in form - no GCD wait needed
         UpdateButtonVisibility(false)
     elseif event == "UPDATE_SHAPESHIFT_FORM" then
-        -- Shifted while map is open - need to wait for GCD
-        -- But only if the button isn't already visible (avoid duplicate GCD waits)
-        if TaxiFrame and TaxiFrame:IsShown() and not cancelButton:IsShown() then
-            UpdateButtonVisibility(true)
+        if TaxiFrame and TaxiFrame:IsShown() then
+            if not IsInForm() then
+                -- Player dropped form (manually or otherwise) - hide UI
+                waitingForFormDrop = false
+                pendingUpdate = false
+                if not InCombatLockdown() then
+                    overlay.waitingText:Hide()
+                    overlay:Hide()
+                    cancelButton:Hide()
+                end
+            elseif not cancelButton:IsShown() and not pendingUpdate then
+                -- Shifted into form while map is open - need to wait for GCD
+                -- But only if the button isn't already visible (avoid duplicate GCD waits)
+                UpdateButtonVisibility(true)
+            end
         end
     end
 end)

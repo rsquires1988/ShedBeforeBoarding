@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+      
       - name: Create Release Package
         run: |
           mkdir -p ShedBeforeBoarding
@@ -18,7 +22,7 @@ jobs:
           cp ShedBeforeBoarding.toc ShedBeforeBoarding/
           cp README.md ShedBeforeBoarding/
           cp LICENSE ShedBeforeBoarding/
-          zip -r ShedBeforeBoarding.zip ShedBeforeBoarding
+          zip -r ShedBeforeBoarding-${{ steps.get_version.outputs.VERSION }}.zip ShedBeforeBoarding
       
       - name: Upload to CurseForge
         uses: itsmeow/curseforge-upload@v3
@@ -26,8 +30,9 @@ jobs:
           token: ${{ secrets.CF_API_KEY }}
           project_id: 1451681
           game_endpoint: wow
-          file_path: ShedBeforeBoarding.zip
+          file_path: ShedBeforeBoarding-${{ steps.get_version.outputs.VERSION }}.zip
+          display_name: ShedBeforeBoarding ${{ steps.get_version.outputs.VERSION }}
           changelog: "See GitHub releases for changelog"
           changelog_type: text
-          game_versions: "TBC Classic"  # Adjust as needed
+          game_versions: "73246:2.5.5"
           release_type: release

@@ -54,7 +54,12 @@ local formSpellNames = {
     ["Ghost Wolf"] = true,
 }
 
--- Index to spell name mapping by class
+-- Fallback index to spell name mapping by class
+-- Note: Druid indices are dynamic. Moonkin/Tree of Life share index 5 (mutually
+-- exclusive talents). If neither is known, Flight Form shifts down to 5.
+-- Dire Bear Form and Swift Flight Form replace Bear Form and Flight Form at the
+-- same index, respectively, once learned.
+-- The primary lookup uses GetShapeshiftFormInfo; this table is a last resort.
 local formIndexToSpellByClass = {
     ["DRUID"] = {
         [1] = "Bear Form",
@@ -62,10 +67,7 @@ local formIndexToSpellByClass = {
         [3] = "Cat Form",
         [4] = "Travel Form",
         [5] = "Moonkin Form",
-        [6] = "Tree of Life",
-        [27] = "Swift Flight Form",
-        [29] = "Flight Form",
-        [31] = "Dire Bear Form",
+        [6] = "Flight Form",
     },
     ["SHAMAN"] = {
         [1] = "Ghost Wolf",
@@ -79,21 +81,24 @@ local function GetFormSpellName()
         return nil
     end
     
+    -- Primary: dynamically resolve via GetShapeshiftFormInfo -> spellID -> spell name
+    local icon, isActive, isCastable, spellID = GetShapeshiftFormInfo(formIndex)
+    if spellID then
+        local spellName = GetSpellInfo(spellID)
+        if spellName and formSpellNames[spellName] then
+            return spellName
+        end
+    end
+    
+    -- Fallback: static table (indices may not match all talent configurations)
     local _, class = UnitClass("player")
     local classTable = formIndexToSpellByClass[class]
-    
     if classTable and classTable[formIndex] then
         return classTable[formIndex]
     end
     
-    -- Fallback: try GetShapeshiftFormInfo
-    local icon, name = GetShapeshiftFormInfo(formIndex)
-    if name and type(name) == "string" and name ~= "" and formSpellNames[name] then
-        return name
-    end
-    
     -- Unknown form
-    print("|cFFFF0000[ShedBeforeBoarding]|r Unknown form index: " .. formIndex .. " for class: " .. class .. " - please report!")
+    print("|cFFFF0000[ShedBeforeBoarding]|r Unknown form index: " .. formIndex .. " for class: " .. (class or "unknown") .. " (spellID: " .. tostring(spellID) .. ") - please report!")
     return nil
 end
 
